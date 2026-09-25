@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>象棋残局板 · SIXGA</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#F7F7F7;color:#333;overflow:hidden;
+  font-family:"Noto Serif SC","Songti SC","STSong","SimSun",serif;-webkit-user-select:none;user-select:none}
+*{box-sizing:border-box}
+#app{display:flex;flex-direction:column;height:100%;padding:.4rem;gap:.4rem}
+.bar{display:flex;gap:.3rem;flex-wrap:wrap;align-items:center}
+button,select,input{font:inherit}
+.bar button{font-size:.95rem;font-weight:500;background:#EFEFEF;border:2px solid #9A9A9A;border-radius:4px;
+  padding:.3rem .7rem;color:#222;cursor:pointer;line-height:1.2}
+.bar button:hover{background:#E4E4E4}
+.bar button.on{background:#DCE4F7;border-color:#3F66C9}
+.bar button:disabled{opacity:.4;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #3F66C9;outline-offset:1px}
+.gap{flex:1}
+.sep{width:1px;align-self:stretch;background:#CCC;margin:0 .15rem}
+#stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative}
+canvas{display:block;touch-action:none;border:2px solid #8C7B66;cursor:pointer}
+#bottom{display:flex;gap:.4rem;align-items:stretch}
+#status{flex-shrink:0;display:flex;align-items:center;gap:.4rem;font-weight:700;font-size:1rem;padding:0 .6rem;
+  background:#fff;border:2px solid #777;white-space:nowrap}
+#status.ck{color:#D82A1C}
+.dot{width:.8rem;height:.8rem;border-radius:50%;display:inline-block}
+#strip{flex:1;min-width:0;display:flex;gap:.1rem;overflow-x:auto;white-space:nowrap;background:#fff;border:2px solid #777;
+  padding:.2rem;align-items:center;scrollbar-width:thin}
+.mv{padding:.1rem .45rem;cursor:pointer;color:#555;font-size:1.05rem;border-radius:2px}
+.mv.on{background:#3F66C9;color:#fff}
+.mn{color:#999;font-size:.85rem;padding-left:.4rem}
+#setup{display:none;flex-direction:column;gap:.35rem;background:#fff;border:2px solid #777;padding:.4rem}
+.setup #setup{display:flex}
+.setup #playbar{display:none}
+.bar .pc{width:2.1rem;height:2.1rem;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;
+  font-weight:700;font-size:1.2rem;cursor:pointer;box-shadow:0 2px 3px rgba(0,0,0,.35);border:0;padding:0}
+.bar .pc.r{background:radial-gradient(circle at 35% 30%,#F7715C,#D82A1C)}
+.bar .pc.b{background:radial-gradient(circle at 35% 30%,#4A4A4A,#0E0E0E)}
+.bar .pc.on{outline:3px solid #3F66C9;outline-offset:2px}
+.tool{font-size:.9rem;background:#EFEFEF;border:2px solid #9A9A9A;border-radius:4px;padding:.25rem .6rem;cursor:pointer}
+.tool.on{background:#DCE4F7;border-color:#3F66C9}
+.lbl{font-size:.85rem;color:#666}
+#fen{flex:1;min-width:8rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;padding:.3rem;border:1px solid #BBB;border-radius:3px}
+select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;background:#fff}
+.read .edit-only{display:none!important}
+#splash{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);font-weight:900;color:#D82A1C;
+  text-shadow:2px 2px 0 #fff,-2px -2px 0 #fff,2px -2px 0 #fff,-2px 2px 0 #fff;pointer-events:none;opacity:0;white-space:nowrap;letter-spacing:.3em}
+#splash.pop{animation:pop 1.3s ease-out forwards}
+@keyframes pop{0%{transform:translate(-50%,-50%) scale(.5);opacity:0}20%{transform:translate(-50%,-50%) scale(1.2);opacity:1}
+  70%{opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+@media (prefers-reduced-motion:reduce){#splash.pop{animation-duration:.01s}}
+#toast{position:absolute;left:50%;bottom:.6rem;transform:translateX(-50%);background:#333;color:#fff;font-size:.9rem;
+  padding:.35rem .8rem;border-radius:4px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:.92}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar" id="playbar">
+    <button id="bUndo" data-t="undo"></button>
+    <button id="bRedo" data-t="redo"></button>
+    <button id="bReset" data-t="reset"></button>
+    <button id="bFlip" data-t="flip"></button>
+    <span class="gap"></span>
+    <button id="bRules" class="edit-only" data-t="rules"></button>
+    <button id="bSave" class="edit-only" data-t="save"></button>
+    <button id="bSetup" class="edit-only" data-t="setup"></button>
+    <button id="bLang" class="edit-only"></button>
+  </div>
+  <div id="setup">
+    <div class="bar" id="tray"></div>
+    <div class="bar">
+      <span class="lbl" data-t="first"></span>
+      <button class="tool" id="tRed" data-t="red"></button>
+      <button class="tool" id="tBlack" data-t="black"></button>
+      <span class="sep"></span>
+      <select id="preset"></select>
+      <button class="tool" id="tFlipS" data-t="flip"></button>
+      <span class="gap"></span>
+      <button class="tool" id="tDone" data-t="done"></button>
+    </div>
+    <div class="bar">
+      <span class="lbl">FEN</span><input id="fen" spellcheck="false">
+      <button class="tool" id="tLoad" data-t="load"></button>
+      <button class="tool" id="tCopy" data-t="copy"></button>
+    </div>
+  </div>
+  <div id="stage"><div id="splash">将 军</div><div id="toast"></div></div>
+  <div id="bottom"><div id="status"></div><div id="strip"></div></div>
+</div>
+<script>
+"use strict";
+/* ---------- text ---------- */
+const TX={
+cn:{undo:"撤销",redo:"重做",reset:"重置",flip:"翻转",rules:"规则",save:"存为起始局面",setup:"摆棋",done:"完成摆棋",
+  first:"先走：",red:"红先",black:"黑先",load:"载入",copy:"复制",erase:"移除",pKings:"预设：仅将帅",pFull:"预设：全局开局",
+  pNone:"选择预设…",rt:"红方走棋",bt:"黑方走棋",ck:"将军！",start:"起始",mateR:"绝杀！红胜",mateB:"绝杀！黑胜",
+  stuckR:"困毙！红胜",stuckB:"困毙！黑胜",saved:"已存为本页起始局面",copied:"FEN 已复制",badFen:"FEN 格式有误，请检查",
+  noKing:"提示：棋盘上缺少将或帅",free:"自由",lang:"EN",splash:"将 军"},
+en:{undo:"Undo",redo:"Redo",reset:"Reset",flip:"Flip",rules:"Rules",save:"Save as start",setup:"Set up",done:"Done",
+  first:"To move:",red:"Red",black:"Black",load:"Load",copy:"Copy",erase:"Remove",pKings:"Preset: kings only",pFull:"Preset: opening position",
+  pNone:"Choose preset…",rt:"Red to move",bt:"Black to move",ck:"Check!",start:"Start",mateR:"Checkmate. Red wins",mateB:"Checkmate. Black wins",
+  stuckR:"Stalemate. Red wins",stuckB:"Stalemate. Black wins",saved:"Saved as this slide's start",copied:"FEN copied",badFen:"That FEN could not be read",
+  noKing:"Note: a king is missing",free:"free",lang:"中文",splash:"将 军"}};
+
+/* ---------- engine ---------- */
+const NM="一二三四五六七八九", FWD="１２３４５６７８９";
+const NAME={rR:"车",rN:"马",rB:"相",rA:"仕",rK:"帅",rC:"炮",rP:"兵",bR:"车",bN:"马",bB:"象",bA:"士",bK:"将",bC:"炮",bP:"卒"};
+const FULL_FEN="rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w";
+const KINGS_FEN="3k5/9/9/9/9/9/9/9/9/4K4 w";
+const D4=[[1,0],[-1,0],[0,1],[0,-1]], DG=[[1,1],[1,-1],[-1,1],[-1,-1]];
+const HN=[[1,2],[-1,2],[1,-2],[-1,-2],[2,1],[2,-1],[-2,1],[-2,-1]];
+const inB=(x,y)=>x>=0&&x<9&&y>=0&&y<10;
+const opp=s=>s==="r"?"b":"r";
+const copyG=g=>g.map(r=>r.slice());
+
+function parseFEN(f){
+  const parts=f.trim().split(/\s+/), rows=(parts[0]||"").split("/");
+  if(rows.length!==10) throw 0;
+  const map={R:"R",N:"N",H:"N",B:"B",E:"B",A:"A",K:"K",C:"C",P:"P"};
+  const g=rows.map(row=>{const out=[];for(const ch of row){
+    if(/[1-9]/.test(ch)){for(let i=0;i<+ch;i++)out.push("");continue;}
+    const t=map[ch.toUpperCase()]; if(!t) throw 0;
+    out.push((ch===ch.toUpperCase()?"r":"b")+t);}
+    if(out.length!==9) throw 0; return out;});
+  return {g,turn:parts[1]==="b"?"b":"r"};
+}
+function toFEN(g,turn){
+  return g.map(row=>{let s="",e=0;for(const p of row){if(!p){e++;continue;}if(e){s+=e;e=0;}
+    const c=p[1].toLowerCase(); s+=p[0]==="r"?c.toUpperCase():c;} return s+(e?e:"");}).join("/")+" "+(turn==="b"?"b":"w");
+}
+function pseudo(g,x,y){
+  const p=g[y][x]; if(!p) return [];
+  const s=p[0],t=p[1],o=opp(s),out=[];
+  const add=(tx,ty)=>{if(!inB(tx,ty))return;const q=g[ty][tx];if(q&&q[0]===s)return;out.push([tx,ty]);};
+  const palace=(tx,ty)=>tx>=3&&tx<=5&&(s==="r"?ty>=7&&ty<=9:ty>=0&&ty<=2);
+  if(t==="R"||t==="C"){
+    for(const [dx,dy] of D4){let tx=x+dx,ty=y+dy,screen=false;
+      while(inB(tx,ty)){const q=g[ty][tx];
+        if(t==="R"){if(!q)out.push([tx,ty]);else{if(q[0]===o)out.push([tx,ty]);break;}}
+        else if(!screen){if(!q)out.push([tx,ty]);else screen=true;}
+        else if(q){if(q[0]===o)out.push([tx,ty]);break;}
+        tx+=dx;ty+=dy;}}
+  }else if(t==="N"){
+    for(const [dx,dy] of HN){const lx=Math.abs(dx)===2?x+dx/2:x,ly=Math.abs(dy)===2?y+dy/2:y;
+      if(inB(lx,ly)&&!g[ly][lx])add(x+dx,y+dy);}
+  }else if(t==="B"){
+    for(const [dx,dy] of DG){const tx=x+2*dx,ty=y+2*dy;
+      if(!inB(tx,ty)||(s==="r"?ty<5:ty>4))continue; if(!g[y+dy][x+dx])add(tx,ty);}
+  }else if(t==="A"){for(const [dx,dy] of DG)if(palace(x+dx,y+dy))add(x+dx,y+dy);}
+  else if(t==="K"){for(const [dx,dy] of D4)if(palace(x+dx,y+dy))add(x+dx,y+dy);}
+  else if(t==="P"){const f=s==="r"?-1:1;add(x,y+f);if(s==="r"?y<=4:y>=5){add(x-1,y);add(x+1,y);}}
+  return out;
+}
+function findK(g,s){for(let y=0;y<10;y++)for(let x=0;x<9;x++)if(g[y][x]===s+"K")return [x,y];return null;}
+function inCheck(g,s){
+  const k=findK(g,s); if(!k) return false; const o=opp(s), ok=findK(g,o);
+  if(ok&&ok[0]===k[0]){let clear=true;for(let y=Math.min(k[1],ok[1])+1;y<Math.max(k[1],ok[1]);y++)if(g[y][k[0]]){clear=false;break;}if(clear)return true;}
+  for(let y=0;y<10;y++)for(let x=0;x<9;x++){const p=g[y][x];
+    if(p&&p[0]===o&&pseudo(g,x,y).some(m=>m[0]===k[0]&&m[1]===k[1]))return true;}
+  return false;
+}
+function apply(g,f,t){const n=copyG(g);n[t[1]][t[0]]=n[f[1]][f[0]];n[f[1]][f[0]]="";return n;}
+function legal(g,x,y){const s=g[y][x][0];return pseudo(g,x,y).filter(m=>!inCheck(apply(g,[x,y],m),s));}
+function hasLegal(g,s){for(let y=0;y<10;y++)for(let x=0;x<9;x++){const p=g[y][x];if(p&&p[0]===s&&legal(g,x,y).length)return true;}return false;}
+const numFor=(s,n)=>s==="r"?NM[n-1]:FWD[n-1];
+const fileOf=(s,x)=>s==="r"?9-x:x+1;
+function notate(g,f,t){
+  const p=g[f[1]][f[0]],s=p[0],ty=p[1],ch=NAME[p];
+  const same=[];for(let y=0;y<10;y++)if(g[y][f[0]]===p)same.push(y);
+  same.sort((a,b)=>s==="r"?a-b:b-a);
+  let head=ch+numFor(s,fileOf(s,f[0]));
+  if(same.length>1&&ty!=="A"&&ty!=="B"){const i=same.indexOf(f[1]);
+    head=(same.length===2?["前","后"][i]:same.length===3?["前","中","后"][i]:NM[i])+ch;}
+  const dy=t[1]-f[1];
+  if(dy===0) return head+"平"+numFor(s,fileOf(s,t[0]));
+  const fwd=s==="r"?-dy:dy;
+  return head+(fwd>0?"进":"退")+numFor(s,"RCPK".includes(ty)?Math.abs(dy):fileOf(s,t[0]));
+}
+
+/* ---------- state ---------- */
+let lang="cn",rules=true,flip=false,view="edit",mode="play";
+let states=[],ptr=0,sel=null,targets=[],drag=null,tool=null,office=false;
+let geo=null;
+const $=id=>document.getElementById(id);
+const T=()=>TX[lang];
+const cur=()=>states[ptr];
+
+function store(k,v){
+  if(office){Office.context.document.settings.set(k,v);return;}
+  try{localStorage.setItem("sixga-xq."+k,JSON.stringify(v));}catch(e){}
+}
+function recall(k){
+  if(office){const v=Office.context.document.settings.get(k);return v===null?undefined:v;}
+  try{const v=localStorage.getItem("sixga-xq."+k);return v===null?undefined:JSON.parse(v);}catch(e){return undefined;}
+}
+function persist(msg){
+  if(office)Office.context.document.settings.saveAsync(r=>{if(r.status==="succeeded"&&msg)toast(msg);});
+  else if(msg)toast(msg);
+}
+function startFrom(fen){const p=parseFEN(fen);states=[{g:p.g,turn:p.turn}];ptr=0;sel=null;targets=[];}
+
+/* ---------- drawing ---------- */
+const cv=document.createElement("canvas");$("stage").prepend(cv);
+function layout(){
+  const st=$("stage"),W=st.clientWidth,H=st.clientHeight;
+  const s=Math.max(10,Math.min((W-4)/9.6,(H-4)/11.3));
+  geo={s,mx:.8*s,my:1.15*s,W:Math.round(9.6*s),H:Math.round(11.3*s)};
+  const d=window.devicePixelRatio||1;
+  cv.width=Math.round(geo.W*d);cv.height=Math.round(geo.H*d);cv.style.width=geo.W+"px";cv.style.height=geo.H+"px";
+  cv.getContext("2d").setTransform(d,0,0,d,0,0);
+  $("splash").style.fontSize=(1.4*s)+"px";
+  draw();
+}
+const PX=x=>geo.mx+(flip?8-x:x)*geo.s, PY=y=>geo.my+(flip?9-y:y)*geo.s;
+function drawPiece(ctx,pc,cx,cy,r,lift){
+  const s=geo.s,red=pc[0]==="r";
+  ctx.save();ctx.shadowColor="rgba(0,0,0,"+(lift?.45:.35)+")";ctx.shadowBlur=(lift?.3:.1)*s;ctx.shadowOffsetY=(lift?.14:.05)*s;
+  const gr=ctx.createRadialGradient(cx-.15*s,cy-.18*s,.05*s,cx,cy,r);
+  if(red){gr.addColorStop(0,"#F7715C");gr.addColorStop(1,"#D82A1C");}else{gr.addColorStop(0,"#4A4A4A");gr.addColorStop(1,"#0E0E0E");}
+  ctx.fillStyle=gr;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.strokeStyle="rgba(255,255,255,.28)";ctx.lineWidth=Math.max(1,s/40);ctx.beginPath();ctx.arc(cx,cy,r*.86,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle="#fff";ctx.font="700 "+(r*1.25)+'px "Noto Serif SC","Songti SC","STSong","SimSun",serif';
+  ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(NAME[pc],cx,cy+.03*s);
+}
+function draw(){
+  if(!geo||!states.length)return;
+  const {s,mx,my,W,H}=geo,ctx=cv.getContext("2d"),st=cur(),g=st.g;
+  const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#EFD3A1");bg.addColorStop(1,"#E4C286");
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="#4E4A44";ctx.lineWidth=.09*s;ctx.strokeRect(mx-.3*s,my-.3*s,8.6*s,9.6*s);
+  ctx.strokeStyle="#6E6A64";ctx.lineWidth=Math.max(1,s/38);ctx.beginPath();
+  const ln=(a,b,c,d)=>{ctx.moveTo(PX(a),PY(b));ctx.lineTo(PX(c),PY(d));};
+  for(let i=0;i<10;i++)ln(0,i,8,i);ln(0,0,0,9);ln(8,0,8,9);
+  for(let i=1;i<8;i++){ln(i,0,i,4);ln(i,5,i,9);}
+  ln(3,0,5,2);ln(5,0,3,2);ln(3,7,5,9);ln(5,7,3,9);ctx.stroke();
+  const mk=[[1,2],[7,2],[1,7],[7,7]];for(let x=0;x<9;x+=2){mk.push([x,3]);mk.push([x,6]);}
+  ctx.beginPath();const q=.09*s,l=.22*s;
+  for(const [x,y] of mk){const cx=PX(x),cy=PY(y);for(const sx of [-1,1]){
+    if((sx<0&&cx-mx<1)||(sx>0&&cx-mx>8*s-1))continue;
+    for(const sy of [-1,1]){ctx.moveTo(cx+sx*q,cy+sy*(q+l));ctx.lineTo(cx+sx*q,cy+sy*q);ctx.lineTo(cx+sx*(q+l),cy+sy*q);}}}
+  ctx.stroke();
+  const ff='"Noto Serif SC","Songti SC","STSong","SimSun",serif';
+  ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle="#6A5A46";ctx.font=(.46*s)+"px "+ff;
+  ["楚","河","汉","界"].forEach((c,k)=>ctx.fillText(c,mx+(1.1+k*2)*s,my+4.5*s));
+  ctx.fillStyle="#555";ctx.font=(.38*s)+"px "+ff;
+  for(let x=0;x<9;x++){const topBlack=!flip;
+    ctx.fillText(topBlack?String(x+1):NM[8-x],PX(x),.45*s);ctx.fillText(topBlack?NM[8-x]:String(x+1),PX(x),H-.45*s);}
+  if(st.f&&mode==="play"){ctx.strokeStyle="#2F55C0";ctx.lineWidth=Math.max(2,s/18);ctx.beginPath();
+    for(const p of [st.f,st.t]){const cx=PX(p[0]),cy=PY(p[1]),r=.5*s,e=.16*s;
+      for(const sx of [-1,1])for(const sy of [-1,1]){ctx.moveTo(cx+sx*r,cy+sy*(r-e));ctx.lineTo(cx+sx*r,cy+sy*r);ctx.lineTo(cx+sx*(r-e),cy+sy*r);}}
+    ctx.stroke();}
+  for(let y=0;y<10;y++)for(let x=0;x<9;x++){const pc=g[y][x];if(!pc)continue;
+    if(drag&&drag.moved&&drag.from[0]===x&&drag.from[1]===y){ctx.globalAlpha=.3;drawPiece(ctx,pc,PX(x),PY(y),.45*s);ctx.globalAlpha=1;continue;}
+    drawPiece(ctx,pc,PX(x),PY(y),.45*s);}
+  if(sel){ctx.strokeStyle="#3F66C9";ctx.lineWidth=Math.max(2,s/14);ctx.beginPath();ctx.arc(PX(sel[0]),PY(sel[1]),.52*s,0,Math.PI*2);ctx.stroke();
+    if(rules&&mode==="play")for(const [x,y] of targets){
+      if(g[y][x]){ctx.strokeStyle="rgba(63,102,201,.85)";ctx.lineWidth=Math.max(2,s/16);ctx.beginPath();ctx.arc(PX(x),PY(y),.5*s,0,Math.PI*2);ctx.stroke();}
+      else{ctx.fillStyle="rgba(63,102,201,.75)";ctx.beginPath();ctx.arc(PX(x),PY(y),.13*s,0,Math.PI*2);ctx.fill();}}}
+  if(drag&&drag.moved)drawPiece(ctx,drag.pc,drag.x,drag.y,.5*s,true);
+}
+
+/* ---------- ui ---------- */
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove("show"),1800);}
+function splash(){const e=$("splash");e.classList.remove("pop");void e.offsetWidth;e.classList.add("pop");}
+function statusText(){
+  const st=cur(),t=T();
+  if(mode==="setup")return {txt:st.turn==="r"?t.rt:t.bt,ck:false,side:st.turn};
+  const chk=inCheck(st.g,st.turn);
+  if(rules&&findK(st.g,st.turn)&&!hasLegal(st.g,st.turn)){const w=opp(st.turn);
+    return {txt:chk?(w==="r"?t.mateR:t.mateB):(w==="r"?t.stuckR:t.stuckB),ck:true,side:w};}
+  return {txt:(chk?t.ck+" ":"")+(st.turn==="r"?t.rt:t.bt),ck:chk,side:st.turn};
+}
+function render(){
+  const t=T();
+  document.querySelectorAll("[data-t]").forEach(el=>{el.textContent=t[el.dataset.t];});
+  $("bLang").textContent=t.lang;
+  $("bRules").classList.toggle("on",rules);$("bFlip").classList.toggle("on",flip);$("tFlipS").classList.toggle("on",flip);
+  $("bUndo").disabled=ptr===0;$("bRedo").disabled=ptr>=states.length-1;
+  document.body.classList.toggle("setup",mode==="setup");
+  document.body.classList.toggle("read",view==="read");
+  $("tRed").classList.toggle("on",cur().turn==="r");$("tBlack").classList.toggle("on",cur().turn==="b");
+  $("tray").querySelectorAll("[data-pc]").forEach(b=>b.classList.toggle("on",tool===b.dataset.pc));
+  $("preset").innerHTML=`<option value="">${t.pNone}</option><option value="k">${t.pKings}</option><option value="f">${t.pFull}</option>`;
+  if(document.activeElement!==$("fen"))$("fen").value=toFEN(cur().g,cur().turn);
+  const S=statusText();$("status").className=S.ck?"ck":"";
+  $("status").innerHTML=`<span class="dot" style="background:${S.side==="r"?"#D82A1C":"#111"}"></span>${S.txt}`;
+  let h=`<span class="mv${ptr===0?" on":""}" data-p="0">${t.start}</span>`;
+  const bStart=states[0].turn==="b";
+  for(let i=1;i<states.length;i++){const mover=states[i-1].turn,n=Math.floor((i-1+(bStart?1:0))/2)+1;
+    if(mover==="r")h+=`<span class="mn">${n}.</span>`;else if(i===1)h+=`<span class="mn">${n}. …</span>`;
+    h+=`<span class="mv${ptr===i?" on":""}" data-p="${i}">${states[i].mv}</span>`;}
+  const sp=$("strip");sp.innerHTML=mode==="setup"?"":h;
+  const on=sp.querySelector(".mv.on");if(on)sp.scrollLeft=on.offsetLeft-sp.clientWidth/2;
+  draw();
+}
+function buildTray(){
+  let h="";for(const s of ["r","b"])for(const t of ["K","A","B","N","R","C","P"])
+    h+=`<button class="pc ${s}" data-pc="${s+t}" title="${NAME[s+t]}">${NAME[s+t]}</button>`;
+  h+=`<button class="tool" data-pc="erase" data-t="erase"></button>`;
+  $("tray").innerHTML=h;
+  $("tray").addEventListener("click",e=>{const b=e.target.closest("[data-pc]");if(!b)return;
+    tool=tool===b.dataset.pc?null:b.dataset.pc;render();});
+}
+
+/* ---------- actions ---------- */
+function go(i){ptr=Math.max(0,Math.min(states.length-1,i));sel=null;targets=[];render();}
+function doMove(f,t){
+  const st=cur(),g=st.g,pc=g[f[1]][f[0]];
+  const ok=pseudo(g,f[0],f[1]).some(m=>m[0]===t[0]&&m[1]===t[1]);
+  const mv=ok?notate(g,f,t):NAME[pc]+"·"+T().free;
+  const ng=apply(g,f,t),turn=opp(pc[0]);
+  states=states.slice(0,ptr+1);states.push({g:ng,turn,f,t,mv});ptr++;sel=null;targets=[];
+  render();if(inCheck(ng,turn))splash();
+}
+function reset(){const s=recall("start");try{startFrom(s||KINGS_FEN);}catch(e){startFrom(KINGS_FEN);}render();}
+function enterSetup(){const st=cur();states=[{g:copyG(st.g),turn:st.turn}];ptr=0;sel=null;tool=null;mode="setup";render();}
+function leaveSetup(save){mode="play";tool=null;sel=null;const g=cur().g;
+  if(!findK(g,"r")||!findK(g,"b"))toast(T().noKing);
+  if(save&&view==="edit"){store("start",toFEN(g,cur().turn));persist(T().saved);}
+  render();}
+function saveStart(){const st=cur();startFrom(toFEN(st.g,st.turn));store("start",toFEN(cur().g,cur().turn));persist(T().saved);render();}
+
+/* ---------- pointer ---------- */
+function hit(e){const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;
+  let X=Math.round((px-geo.mx)/geo.s),Y=Math.round((py-geo.my)/geo.s);
+  if(X<0||X>8||Y<0||Y>9)return null;if(flip){X=8-X;Y=9-Y;}return [X,Y];}
+const same=(a,b)=>a&&b&&a[0]===b[0]&&a[1]===b[1];
+cv.addEventListener("pointerdown",e=>{
+  const p=hit(e),g=cur().g,r=cv.getBoundingClientRect();
+  if(mode==="setup"){
+    if(!p)return;
+    if(tool){if(tool==="erase")g[p[1]][p[0]]="";else g[p[1]][p[0]]=tool;render();return;}
+    if(g[p[1]][p[0]]){cv.setPointerCapture(e.pointerId);drag={from:p,pc:g[p[1]][p[0]],x:e.clientX-r.left,y:e.clientY-r.top,moved:false,sx:e.clientX,sy:e.clientY};}
+    return;}
+  if(!p){sel=null;targets=[];draw();return;}
+  if(sel&&targets.some(m=>same(m,p))){doMove(sel,p);return;}
+  const pc=g[p[1]][p[0]];
+  if(pc&&(!rules||pc[0]===cur().turn)){
+    sel=p;targets=rules?legal(g,p[0],p[1]):[];
+    if(!rules){for(let y=0;y<10;y++)for(let x=0;x<9;x++){const q=g[y][x];if(!q||q[0]!==pc[0])targets.push([x,y]);}}
+    cv.setPointerCapture(e.pointerId);
+    drag={from:p,pc,x:e.clientX-r.left,y:e.clientY-r.top,moved:false,sx:e.clientX,sy:e.clientY};
+  }else{sel=null;targets=[];}
+  draw();
+});
+cv.addEventListener("pointermove",e=>{if(!drag)return;const r=cv.getBoundingClientRect();
+  drag.x=e.clientX-r.left;drag.y=e.clientY-r.top;
+  if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>5)drag.moved=true;if(drag.moved)draw();});
+function endDrag(e){if(!drag)return;const d=drag;drag=null;
+  if(!d.moved){draw();return;}
+  const q=hit(e),g=cur().g;
+  if(mode==="setup"){if(!q)g[d.from[1]][d.from[0]]="";else if(!same(q,d.from)){g[q[1]][q[0]]=d.pc;g[d.from[1]][d.from[0]]="";}render();return;}
+  if(q&&!same(q,d.from)&&targets.some(m=>same(m,q))){doMove(d.from,q);return;}
+  draw();}
+cv.addEventListener("pointerup",endDrag);
+cv.addEventListener("pointercancel",()=>{drag=null;draw();});
+
+/* ---------- buttons ---------- */
+$("bUndo").onclick=()=>go(ptr-1);
+$("bRedo").onclick=()=>go(ptr+1);
+$("bReset").onclick=()=>reset();
+$("bFlip").onclick=$("tFlipS").onclick=()=>{flip=!flip;store("flip",flip);persist();render();};
+$("bRules").onclick=()=>{rules=!rules;sel=null;targets=[];store("rules",rules);persist();render();};
+$("bSave").onclick=saveStart;
+$("bSetup").onclick=enterSetup;
+$("bLang").onclick=()=>{lang=lang==="cn"?"en":"cn";store("lang",lang);persist();render();};
+$("tDone").onclick=()=>leaveSetup(true);
+$("tRed").onclick=()=>{cur().turn="r";render();};
+$("tBlack").onclick=()=>{cur().turn="b";render();};
+$("preset").onchange=e=>{const v=e.target.value;if(!v)return;const p=parseFEN(v==="k"?KINGS_FEN:FULL_FEN);
+  states=[{g:p.g,turn:p.turn}];ptr=0;render();};
+$("tLoad").onclick=()=>{try{const p=parseFEN($("fen").value);states=[{g:p.g,turn:p.turn}];ptr=0;$("fen").blur();render();}catch(e){toast(T().badFen);}};
+$("tCopy").onclick=()=>{const f=$("fen");f.value=toFEN(cur().g,cur().turn);f.select();
+  const done=()=>toast(T().copied);
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(f.value).then(done,()=>{document.execCommand("copy");done();});
+  else{document.execCommand("copy");done();}};
+$("strip").addEventListener("click",e=>{const p=e.target.getAttribute("data-p");if(p!==null)go(+p);});
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;
+  if(e.key==="ArrowLeft"){e.preventDefault();go(ptr-1);}else if(e.key==="ArrowRight"){e.preventDefault();go(ptr+1);}});
+
+/* ---------- start-up ---------- */
+function setView(v){const was=view;view=v==="read"?"read":"edit";
+  if(view==="read"){if(mode==="setup"){mode="play";tool=null;}if(was!=="read")reset();}
+  render();}
+function init(){
+  lang=recall("lang")==="en"?"en":"cn";
+  const r=recall("rules");rules=r===undefined?true:!!r;flip=!!recall("flip");
+  buildTray();
+  const s=recall("start");
+  try{startFrom(s||KINGS_FEN);}catch(e){startFrom(KINGS_FEN);}
+  if(!s&&view==="edit")mode="setup";
+  new ResizeObserver(layout).observe($("stage"));
+  render();
+  if(document.fonts&&document.fonts.load)document.fonts.load('700 20px "Noto Serif SC"',"车马相仕帅炮兵象士将卒楚河汉界").then(draw,()=>{});
+  const fit=()=>{document.documentElement.style.fontSize=Math.max(12,Math.min(22,Math.min(innerWidth/38,innerHeight/44)))+"px";};
+  fit();addEventListener("resize",fit);
+}
+if(typeof Office!=="undefined"&&Office.onReady){
+  Office.onReady(info=>{
+    office=!!(info&&info.host&&Office.context&&Office.context.document&&Office.context.document.settings);
+    init();
+    const doc=office&&Office.context.document;
+    if(doc&&doc.getActiveViewAsync){
+      doc.getActiveViewAsync(r=>{if(r.status==="succeeded")setView(r.value);});
+      doc.addHandlerAsync(Office.EventType.ActiveViewChanged,ev=>setView(ev.activeView));
+    }
+  });
+}else init();
+</script>
+</body>
+</html>
