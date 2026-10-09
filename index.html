@@ -21,7 +21,15 @@ button,select,input{font:inherit}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #3F66C9;outline-offset:1px}
 .gap{flex:1}
 .sep{width:1px;align-self:stretch;background:#CCC;margin:0 .15rem}
-#stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative}
+#stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;gap:10px}
+.sbox{display:none;flex:none;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--d)*.16);
+  border-radius:8px;border:2px solid #4A2F17;--d:2rem;
+  background:linear-gradient(90deg,#6A4321,#80532B 50%,#6A4321);box-shadow:inset 0 3px 8px rgba(0,0,0,.55),inset 0 -1px 0 rgba(255,255,255,.12)}
+.setup.side .sbox{display:flex}
+.setup.side #tray{display:none}
+.srow{display:flex;gap:calc(var(--d)*.16);justify-content:center}
+.blbl{font:700 calc(var(--d)*.42)/1 "Noto Serif SC","Songti SC",serif;color:#3A2410;letter-spacing:.3em;
+  text-shadow:0 1px 0 rgba(255,255,255,.18);margin-bottom:calc(var(--d)*.12)}
 canvas{display:block;touch-action:none;border:2px solid #8C7B66;cursor:pointer}
 #bottom{display:flex;gap:.4rem;align-items:stretch}
 #status{flex-shrink:0;display:flex;align-items:center;gap:.4rem;font-weight:700;font-size:1rem;padding:0 .6rem;
@@ -108,7 +116,7 @@ select{max-width:9.5rem;font-size:.9rem;padding:.2rem;border:1px solid #BBB;bord
       <button class="tool" id="tLink" data-t="link"></button>
     </div>
   </div>
-  <div id="stage"><div id="splash">将 军</div><div id="toast"></div></div>
+  <div id="stage"><div class="sbox box" id="boxR"></div><div class="sbox box" id="boxB"></div><div id="splash">将 军</div><div id="toast"></div></div>
   <div id="modal"><div class="box"><span class="lbl" data-t="manual"></span><textarea id="mtext" readonly></textarea><div class="bar"><span class="gap"></span><button class="tool" id="mClose" data-t="close"></button></div></div></div>
   <div id="bottom"><div id="status"></div><div id="strip"></div></div>
 </div>
@@ -250,10 +258,12 @@ function persist(msg){
 function startFrom(fen){const p=parseFEN(fen);states=[{g:p.g,turn:p.turn}];ptr=0;sel=null;targets=[];}
 
 /* ---------- drawing ---------- */
-const cv=document.createElement("canvas");$("stage").prepend(cv);
+const cv=document.createElement("canvas");$("boxR").after(cv);
 function layout(){
-  const st=$("stage"),W=st.clientWidth,H=st.clientHeight;
-  const s=Math.max(10,Math.min((W-4)/9.6,(H-4)/11.3));
+  const st=$("stage"),W=st.clientWidth,H=st.clientHeight,side=isSide();
+  const s=Math.max(10,side?Math.min((W-24)/(9.6+2*2.6),(H-4)/11.3):Math.min((W-4)/9.6,(H-4)/11.3));
+  if(side)for(const id of ["boxR","boxB"]){const b=$(id);b.style.width=Math.round(2.6*s)+"px";b.style.height=Math.round(11.3*s)+"px";
+    b.style.setProperty("--d",(.9*s)+"px");}
   geo={s,mx:.8*s,my:1.15*s,W:Math.round(9.6*s),H:Math.round(11.3*s)};
   const d=window.devicePixelRatio||1;
   cv.width=Math.round(geo.W*d);cv.height=Math.round(geo.H*d);cv.style.width=geo.W+"px";cv.style.height=geo.H+"px";
@@ -333,6 +343,7 @@ function render(){
   document.body.classList.toggle("setup",mode==="setup");
   document.body.classList.toggle("read",view==="read");
   $("tRed").classList.toggle("on",cur().turn==="r");$("tBlack").classList.toggle("on",cur().turn==="b");
+  updateSide();
   if(mode==="setup")renderTray();
   $("preset").innerHTML=`<option value="">${t.pNone}</option><option value="k">${t.pKings}</option><option value="f">${t.pFull}</option><option value="e">${t.pEmpty}</option>`;
   if(document.activeElement!==$("fen"))$("fen").value=toFEN(cur().g,cur().turn);
@@ -349,19 +360,28 @@ function render(){
 }
 /* the box holds whatever of the full 32-piece set is not on the board */
 const ORDER=["K","A","B","N","R","C","P"];
-function renderTray(){const g=cur().g;let h="";
+/* side layout: one box per side, a row per piece type (pawns over three rows) */
+const SIDE_ROWS=[["K",0],["A",0,1],["B",0,1],["N",0,1],["R",0,1],["C",0,1],["P",0,1],["P",2,3],["P",4]];
+const isSide=()=>mode==="setup"&&innerWidth>innerHeight*1.15;
+function updateSide(){const want=isSide();if(want!==document.body.classList.contains("side")){document.body.classList.toggle("side",want);if(geo)layout();}}
+function cell(g,pc,i){const left=Math.max(0,MAXN[pc[1]]-countOf(g,pc));
+  return i<left?`<button type="button" class="tp ${pc[0]}${tool===pc&&i===left-1?" up":""}" data-pc="${pc}" title="${pcLabel(pc)}">${NAME[pc]}</button>`
+    :`<span class="slot"></span>`;}
+function renderTray(){const g=cur().g;
+  if(isSide()){for(const [sd,id] of [["r","boxR"],["b","boxB"]]){
+      let h=`<div class="blbl">${lang==="cn"?(sd==="r"?"红方":"黑方"):(sd==="r"?"RED":"BLACK")}</div>`;
+      for(const [t,...idx] of SIDE_ROWS)h+=`<div class="srow">${idx.map(i=>cell(g,sd+t,i)).join("")}</div>`;
+      $(id).innerHTML=h;}
+    return;}
+  let h="";
   for(const sd of ["r","b"]){h+=`<div class="trow">`;
-    for(const t of ORDER){const pc=sd+t,left=Math.max(0,MAXN[t]-countOf(g,pc));h+=`<div class="grp">`;
-      for(let i=0;i<MAXN[t];i++)h+=i<left
-        ?`<button type="button" class="tp ${sd}${tool===pc&&i===left-1?" up":""}" data-pc="${pc}" title="${pcLabel(pc)}">${NAME[pc]}</button>`
-        :`<span class="slot"></span>`;
-      h+=`</div>`;}
+    for(const t of ORDER){h+=`<div class="grp">`;for(let i=0;i<MAXN[t];i++)h+=cell(g,sd+t,i);h+=`</div>`;}
     h+=`</div>`;}
   $("tray").innerHTML=h;}
 function putBack(){if(!sel){toast(T().pickFirst);return;}cur().g[sel[1]][sel[0]]="";sel=null;targets=[];render();}
 let tdrag=null;
 function buildTray(){
-  $("tray").addEventListener("pointerdown",e=>{const b=e.target.closest(".tp");
+  for(const box of [$("tray"),$("boxR"),$("boxB")])box.addEventListener("pointerdown",e=>{const b=e.target.closest(".tp");
     if(!b){if(sel)putBack();else if(tool){tool=null;render();}return;}
     e.preventDefault();const r=b.getBoundingClientRect();
     tdrag={pc:b.dataset.pc,sx:e.clientX,sy:e.clientY,moved:false,ghost:null,src:b,w:r.width,fs:getComputedStyle(b).fontSize};});
@@ -513,7 +533,7 @@ function init(){
   new ResizeObserver(layout).observe($("stage"));
   render();
   if(document.fonts&&document.fonts.load)document.fonts.load('700 20px "Noto Serif SC"',"车马相仕帅炮兵象士将卒楚河汉界").then(draw,()=>{});
-  const fit=()=>{document.documentElement.style.fontSize=Math.max(12,Math.min(22,Math.min(innerWidth/38,innerHeight/44)))+"px";};
+  const fit=()=>{updateSide();document.documentElement.style.fontSize=Math.max(12,Math.min(22,Math.min(innerWidth/38,innerHeight/44)))+"px";};
   fit();addEventListener("resize",fit);
 }
 if(typeof Office!=="undefined"&&Office.onReady){
