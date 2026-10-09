@@ -36,16 +36,28 @@ canvas{display:block;touch-action:none;border:2px solid #8C7B66;cursor:pointer}
 #setup{display:none;flex-direction:column;gap:.35rem;background:#fff;border:2px solid #777;padding:.4rem}
 .setup #setup{display:flex}
 .setup #playbar{display:none}
-.bar .pc{width:2.1rem;height:2.1rem;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;
-  font-weight:700;font-size:1.2rem;cursor:pointer;box-shadow:0 2px 3px rgba(0,0,0,.35);border:0;padding:0}
-.bar .pc.r{background:radial-gradient(circle at 35% 30%,#F7715C,#D82A1C)}
-.bar .pc.b{background:radial-gradient(circle at 35% 30%,#4A4A4A,#0E0E0E)}
-.bar .pc.on{outline:3px solid #3F66C9;outline-offset:2px}
+#tray{display:flex;flex-direction:column;gap:.4rem;padding:.5rem .4rem;border-radius:7px;border:2px solid #4A2F17;
+  background:linear-gradient(180deg,#80532B,#5E3B1D);box-shadow:inset 0 3px 7px rgba(0,0,0,.55),inset 0 -1px 0 rgba(255,255,255,.12)}
+.trow{display:flex;justify-content:center;gap:.45rem;--d:min(2.1rem,calc((100vw - 4.5rem)/19.5))}
+.grp{display:flex;gap:.12rem}
+.tp,.slot{width:var(--d);height:var(--d);border-radius:50%;flex:none}
+.slot{background:radial-gradient(circle at 50% 42%,rgba(0,0,0,.5),rgba(0,0,0,.22) 72%);
+  box-shadow:inset 0 2px 3px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.1)}
+.tp{border:0;padding:0;color:#fff;font:700 calc(var(--d)*.58)/1 "Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  cursor:grab;touch-action:none;position:relative;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 2px rgba(0,0,0,.5);transition:transform .12s ease-out,box-shadow .12s ease-out}
+.tp::after{content:"";position:absolute;inset:7%;border-radius:50%;border:1px solid rgba(255,255,255,.28);pointer-events:none}
+.tp.r{background:radial-gradient(circle at 35% 30%,#F7715C,#D82A1C)}
+.tp.b{background:radial-gradient(circle at 35% 30%,#4A4A4A,#0E0E0E)}
+.tp.up{transform:translateY(-.3rem) scale(1.1);box-shadow:0 .55rem .6rem rgba(0,0,0,.5);outline:2px solid #FFD36B;outline-offset:1px}
+.tp:focus-visible{outline:2px solid #FFD36B;outline-offset:1px}
+.ghost{position:fixed;pointer-events:none;z-index:20;transform:translate(-50%,-50%) scale(1.15);box-shadow:0 .7rem .9rem rgba(0,0,0,.45)}
+@media (prefers-reduced-motion:reduce){.tp{transition:none}}
 .tool{font-size:.9rem;background:#EFEFEF;border:2px solid #9A9A9A;border-radius:4px;padding:.25rem .6rem;cursor:pointer}
 .tool.on{background:#DCE4F7;border-color:#3F66C9}
 .lbl{font-size:.85rem;color:#666}
-#fen{flex:1;min-width:8rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;padding:.3rem;border:1px solid #BBB;border-radius:3px}
-select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;background:#fff}
+#fen{flex:1;min-width:6rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;padding:.3rem;border:1px solid #BBB;border-radius:3px}
+select{max-width:9.5rem;font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;background:#fff}
 .read .edit-only{display:none!important}
 #splash{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);font-weight:900;color:#D82A1C;
   text-shadow:2px 2px 0 #fff,-2px -2px 0 #fff,2px -2px 0 #fff,-2px 2px 0 #fff;pointer-events:none;opacity:0;white-space:nowrap;letter-spacing:.3em}
@@ -77,20 +89,20 @@ select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;bac
     <button id="bLang" class="edit-only"></button>
   </div>
   <div id="setup">
-    <div class="bar" id="tray"></div>
+    <div id="tray"></div>
     <div class="bar">
       <span class="lbl" data-t="first"></span>
       <button class="tool" id="tRed" data-t="red"></button>
       <button class="tool" id="tBlack" data-t="black"></button>
       <span class="sep"></span>
-      <select id="preset"></select>
-      <button class="tool" id="tFlipS" data-t="flip"></button>
       <button class="tool" id="tRules"></button>
+      <button class="tool" id="tFlipS" data-t="flip"></button>
       <span class="gap"></span>
       <button class="tool" id="tDone" data-t="done"></button>
     </div>
     <div class="bar">
-      <span class="lbl">FEN</span><input id="fen" spellcheck="false">
+      <select id="preset"></select>
+      <input id="fen" spellcheck="false" aria-label="FEN">
       <button class="tool" id="tLoad" data-t="load"></button>
       <button class="tool" id="tCopy" data-t="copy"></button>
       <button class="tool" id="tLink" data-t="link"></button>
@@ -105,12 +117,12 @@ select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;bac
 /* ---------- text ---------- */
 const TX={
 cn:{undo:"撤销",export:"复制棋谱",exported:"棋谱已复制（PGN 格式）",noMoves:"还没有着法可复制",placeRule:"规则摆放",placeFree:"自由摆放",manual:"无法自动复制，请全选下面的文字后手动复制",close:"关闭",cantPlace:"不能放在这里",kingsFace:"提示：将帅照面",moverSafe:"提示：未走棋的一方正被将军",badSetup:"提示：此局面不符合摆放规则",redo:"重做",reset:"重置",flip:"翻转",rules:"规则",save:"存为起始局面",setup:"摆棋",done:"完成摆棋",
-  first:"先走：",red:"红先",black:"黑先",load:"载入",copy:"复制",erase:"移除",pKings:"预设：仅将帅",pFull:"预设：全局开局",
+  first:"先走：",red:"红先",black:"黑先",load:"载入",copy:"复制",erase:"移除",pKings:"预设：仅将帅",pFull:"预设：全局开局",pEmpty:"预设：清空棋盘",putBack:"放回盒中",selHint:"点空位移动，点棋盒放回",boxHint:"从棋盒拿棋子摆上棋盘",pickFirst:"先点选棋盘上的棋子",
   pNone:"选择预设…",rt:"红方走棋",bt:"黑方走棋",ck:"将军！",start:"起始",mateR:"绝杀！红胜",mateB:"绝杀！黑胜",
   stuckR:"困毙！红胜",stuckB:"困毙！黑胜",saved:"已存为本页起始局面",copied:"FEN 已复制",link:"复制链接",linked:"链接已复制，可贴到网页或幻灯片",badFen:"FEN 格式有误，请检查",
   noKing:"提示：棋盘上缺少将或帅",free:"自由",lang:"EN",splash:"将 军"},
 en:{undo:"Undo",export:"Copy moves",exported:"Moves copied (PGN)",noMoves:"No moves to copy yet",placeRule:"Legal placement",placeFree:"Free placement",manual:"Couldn't copy automatically. Select the text below and copy it.",close:"Close",cantPlace:" can't go there",kingsFace:"Note: the kings face each other",moverSafe:"Note: the side not to move is in check",badSetup:"Note: this position breaks the placement rules",redo:"Redo",reset:"Reset",flip:"Flip",rules:"Rules",save:"Save as start",setup:"Set up",done:"Done",
-  first:"To move:",red:"Red",black:"Black",load:"Load",copy:"Copy",erase:"Remove",pKings:"Preset: kings only",pFull:"Preset: opening position",
+  first:"To move:",red:"Red",black:"Black",load:"Load",copy:"Copy",erase:"Remove",pKings:"Preset: kings only",pFull:"Preset: opening position",pEmpty:"Preset: empty board",putBack:"Back to box",selHint:"Click an empty point to move, or the box to put it back",boxHint:"Take pieces from the box and place them",pickFirst:"Select a piece on the board first",
   pNone:"Choose preset…",rt:"Red to move",bt:"Black to move",ck:"Check!",start:"Start",mateR:"Checkmate. Red wins",mateB:"Checkmate. Black wins",
   stuckR:"Stalemate. Red wins",stuckB:"Stalemate. Black wins",saved:"Saved as this slide's start",copied:"FEN copied",link:"Copy link",linked:"Link copied. Paste it into a web page or slide",badFen:"That FEN could not be read",
   noKing:"Note: a king is missing",free:"free",lang:"中文",splash:"将 军"}};
@@ -210,7 +222,6 @@ function canPut(g,pc,x,y,from){
   const n=countOf(g,pc)-(from?1:0)-(g[y][x]===pc&&!(from&&from[0]===x&&from[1]===y)?1:0)+1;
   if(n>MAXN[pc[1]]){toast(fullMsg(pc));return false;}
   return true;}
-function placeTargets(g,pc){const out=[];for(let y=0;y<10;y++)for(let x=0;x<9;x++)if(!g[y][x]&&okPlace(pc,x,y))out.push([x,y]);return out;}
 function setupOK(g){for(let y=0;y<10;y++)for(let x=0;x<9;x++){const q=g[y][x];if(q&&!okPlace(q,x,y))return false;}
   for(const s of ["r","b"])for(const t in MAXN)if(countOf(g,s+t)>MAXN[t])return false;return true;}
 function kingsFacing(g){const a=findK(g,"r"),b=findK(g,"b");if(!a||!b||a[0]!==b[0])return false;
@@ -292,7 +303,7 @@ function draw(){
     if(drag&&drag.moved&&drag.from[0]===x&&drag.from[1]===y){ctx.globalAlpha=.3;drawPiece(ctx,pc,PX(x),PY(y),.45*s);ctx.globalAlpha=1;continue;}
     drawPiece(ctx,pc,PX(x),PY(y),.45*s);}
   if(sel){ctx.strokeStyle="#3F66C9";ctx.lineWidth=Math.max(2,s/14);ctx.beginPath();ctx.arc(PX(sel[0]),PY(sel[1]),.52*s,0,Math.PI*2);ctx.stroke();}
-  if(rules){for(const [x,y] of targets){
+  if(rules&&mode==="play"){for(const [x,y] of targets){
       if(g[y][x]){ctx.strokeStyle="rgba(63,102,201,.85)";ctx.lineWidth=Math.max(2,s/16);ctx.beginPath();ctx.arc(PX(x),PY(y),.5*s,0,Math.PI*2);ctx.stroke();}
       else{ctx.fillStyle="rgba(63,102,201,.75)";ctx.beginPath();ctx.arc(PX(x),PY(y),.13*s,0,Math.PI*2);ctx.fill();}}}
   if(drag&&drag.moved)drawPiece(ctx,drag.pc,drag.x,drag.y,.5*s,true);
@@ -303,7 +314,10 @@ function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");cle
 function splash(){const e=$("splash");e.classList.remove("pop");void e.offsetWidth;e.classList.add("pop");}
 function statusText(){
   const st=cur(),t=T();
-  if(mode==="setup")return {txt:st.turn==="r"?t.rt:t.bt,ck:false,side:st.turn};
+  if(mode==="setup"){
+    if(tool)return {txt:lang==="cn"?`已拿起${pcLabel(tool)}，点棋盘放下`:`Holding ${pcLabel(tool)}. Click the board to place it`,ck:false,side:tool[0]};
+    if(sel){const q=st.g[sel[1]][sel[0]];if(q)return {txt:t.selHint,ck:false,side:q[0]};}
+    return {txt:t.boxHint,ck:false,side:st.turn};}
   const chk=inCheck(st.g,st.turn);
   if(rules&&findK(st.g,st.turn)&&!hasLegal(st.g,st.turn)){const w=opp(st.turn);
     return {txt:chk?(w==="r"?t.mateR:t.mateB):(w==="r"?t.stuckR:t.stuckB),ck:true,side:w};}
@@ -319,8 +333,8 @@ function render(){
   document.body.classList.toggle("setup",mode==="setup");
   document.body.classList.toggle("read",view==="read");
   $("tRed").classList.toggle("on",cur().turn==="r");$("tBlack").classList.toggle("on",cur().turn==="b");
-  $("tray").querySelectorAll("[data-pc]").forEach(b=>b.classList.toggle("on",tool===b.dataset.pc));
-  $("preset").innerHTML=`<option value="">${t.pNone}</option><option value="k">${t.pKings}</option><option value="f">${t.pFull}</option>`;
+  if(mode==="setup")renderTray();
+  $("preset").innerHTML=`<option value="">${t.pNone}</option><option value="k">${t.pKings}</option><option value="f">${t.pFull}</option><option value="e">${t.pEmpty}</option>`;
   if(document.activeElement!==$("fen"))$("fen").value=toFEN(cur().g,cur().turn);
   const S=statusText();$("status").className=S.ck?"ck":"";
   $("status").innerHTML=`<span class="dot" style="background:${S.side==="r"?"#D82A1C":"#111"}"></span>${S.txt}`;
@@ -333,17 +347,38 @@ function render(){
   const on=sp.querySelector(".mv.on");if(on)sp.scrollLeft=on.offsetLeft-sp.clientWidth/2;
   draw();
 }
+/* the box holds whatever of the full 32-piece set is not on the board */
+const ORDER=["K","A","B","N","R","C","P"];
+function renderTray(){const g=cur().g;let h="";
+  for(const sd of ["r","b"]){h+=`<div class="trow">`;
+    for(const t of ORDER){const pc=sd+t,left=Math.max(0,MAXN[t]-countOf(g,pc));h+=`<div class="grp">`;
+      for(let i=0;i<MAXN[t];i++)h+=i<left
+        ?`<button type="button" class="tp ${sd}${tool===pc&&i===left-1?" up":""}" data-pc="${pc}" title="${pcLabel(pc)}">${NAME[pc]}</button>`
+        :`<span class="slot"></span>`;
+      h+=`</div>`;}
+    h+=`</div>`;}
+  $("tray").innerHTML=h;}
+function putBack(){if(!sel){toast(T().pickFirst);return;}cur().g[sel[1]][sel[0]]="";sel=null;targets=[];render();}
+let tdrag=null;
 function buildTray(){
-  let h="";for(const s of ["r","b"])for(const t of ["K","A","B","N","R","C","P"])
-    h+=`<button class="pc ${s}" data-pc="${s+t}" title="${NAME[s+t]}">${NAME[s+t]}</button>`;
-  h+=`<button class="tool" data-pc="erase" data-t="erase"></button>`;
-  $("tray").innerHTML=h;
-  $("tray").addEventListener("click",e=>{const b=e.target.closest("[data-pc]");if(!b)return;
-    const v=b.dataset.pc,g=cur().g;
-    if(v==="erase"&&sel){g[sel[1]][sel[0]]="";sel=null;targets=[];render();return;}
-    if(tool===v){tool=null;targets=[];render();return;}
-    if(v!=="erase"&&rules&&countOf(g,v)>=MAXN[v[1]]){toast(fullMsg(v));return;}
-    tool=v;sel=null;targets=rules&&v!=="erase"?placeTargets(g,v):[];render();});
+  $("tray").addEventListener("pointerdown",e=>{const b=e.target.closest(".tp");
+    if(!b){if(sel)putBack();else if(tool){tool=null;render();}return;}
+    e.preventDefault();const r=b.getBoundingClientRect();
+    tdrag={pc:b.dataset.pc,sx:e.clientX,sy:e.clientY,moved:false,ghost:null,src:b,w:r.width,fs:getComputedStyle(b).fontSize};});
+  document.addEventListener("pointermove",e=>{if(!tdrag)return;const d=tdrag;
+    if(!d.moved&&Math.hypot(e.clientX-d.sx,e.clientY-d.sy)>5){d.moved=true;
+      const gh=d.src.cloneNode(true);gh.classList.remove("up");gh.classList.add("ghost");
+      gh.style.width=gh.style.height=d.w+"px";gh.style.fontSize=d.fs;document.body.appendChild(gh);
+      d.ghost=gh;d.src.style.visibility="hidden";sel=null;draw();}
+    if(d.ghost){d.ghost.style.left=e.clientX+"px";d.ghost.style.top=e.clientY+"px";}});
+  const endT=e=>{if(!tdrag)return;const d=tdrag;tdrag=null;if(d.ghost)d.ghost.remove();
+    if(!d.moved){tool=tool===d.pc?null:d.pc;sel=null;targets=[];render();return;}
+    d.src.style.visibility="";
+    const p=e&&e.type==="pointerup"?hit(e):null,g=cur().g;
+    if(p&&canPut(g,d.pc,p[0],p[1],null)){g[p[1]][p[0]]=d.pc;tool=null;}
+    render();};
+  document.addEventListener("pointerup",endT);
+  document.addEventListener("pointercancel",endT);
 }
 
 /* ---------- actions ---------- */
@@ -377,17 +412,15 @@ const same=(a,b)=>a&&b&&a[0]===b[0]&&a[1]===b[1];
 cv.addEventListener("pointerdown",e=>{
   const p=hit(e),g=cur().g,r=cv.getBoundingClientRect();
   if(mode==="setup"){
-    if(!p){sel=null;if(!tool)targets=[];draw();return;}
+    targets=[];
+    if(!p){sel=null;render();return;}
     const here=g[p[1]][p[0]];
-    if(tool){
-      if(tool==="erase")g[p[1]][p[0]]="";
-      else if(canPut(g,tool,p[0],p[1],null))g[p[1]][p[0]]=tool;
-      targets=rules&&tool!=="erase"?placeTargets(g,tool):[];render();return;}
+    if(tool){if(canPut(g,tool,p[0],p[1],null)){g[p[1]][p[0]]=tool;tool=null;}render();return;}
     if(sel&&!here&&!same(sel,p)){moveSetup(sel,p);return;}
-    if(here){const again=same(sel,p);sel=p;targets=rules?placeTargets(g,here):[];
+    if(here){const again=same(sel,p);sel=p;
       cv.setPointerCapture(e.pointerId);
-      drag={from:p,pc:here,x:e.clientX-r.left,y:e.clientY-r.top,moved:false,sx:e.clientX,sy:e.clientY,again};draw();return;}
-    sel=null;targets=[];draw();return;}
+      drag={from:p,pc:here,x:e.clientX-r.left,y:e.clientY-r.top,moved:false,sx:e.clientX,sy:e.clientY,again};render();return;}
+    sel=null;targets=[];render();return;}
   if(!p){sel=null;targets=[];draw();return;}
   if(sel&&targets.some(m=>same(m,p))){doMove(sel,p);return;}
   const pc=g[p[1]][p[0]];
@@ -403,7 +436,7 @@ cv.addEventListener("pointermove",e=>{if(!drag)return;const r=cv.getBoundingClie
   drag.x=e.clientX-r.left;drag.y=e.clientY-r.top;
   if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>5)drag.moved=true;if(drag.moved)draw();});
 function endDrag(e){if(!drag)return;const d=drag;drag=null;
-  if(!d.moved){if(mode==="setup"&&d.again){sel=null;targets=[];}draw();return;}
+  if(!d.moved){if(mode==="setup"){if(d.again){sel=null;targets=[];}render();}else draw();return;}
   const q=hit(e),g=cur().g;
   if(mode==="setup"){
     if(!q){g[d.from[1]][d.from[0]]="";sel=null;targets=[];render();return;}
@@ -420,14 +453,14 @@ $("bRedo").onclick=()=>go(ptr+1);
 $("bReset").onclick=()=>reset();
 $("bFlip").onclick=$("tFlipS").onclick=()=>{flip=!flip;store("flip",flip);persist();render();};
 $("bRules").onclick=$("tRules").onclick=()=>{rules=!rules;sel=null;
-  targets=mode==="setup"&&rules&&tool&&tool!=="erase"?placeTargets(cur().g,tool):[];store("rules",rules);persist();render();};
+  targets=[];store("rules",rules);persist();render();};
 $("bSave").onclick=saveStart;
 $("bSetup").onclick=enterSetup;
 $("bLang").onclick=()=>{lang=lang==="cn"?"en":"cn";store("lang",lang);persist();render();};
 $("tDone").onclick=()=>leaveSetup(true);
 $("tRed").onclick=()=>{cur().turn="r";render();};
 $("tBlack").onclick=()=>{cur().turn="b";render();};
-$("preset").onchange=e=>{const v=e.target.value;if(!v)return;const p=parseFEN(v==="k"?KINGS_FEN:FULL_FEN);
+$("preset").onchange=e=>{const v=e.target.value;if(!v)return;const p=parseFEN(v==="k"?KINGS_FEN:v==="e"?"9/9/9/9/9/9/9/9/9/9 w":FULL_FEN);sel=null;tool=null;
   states=[{g:p.g,turn:p.turn}];ptr=0;render();};
 $("tLoad").onclick=()=>{try{const p=parseFEN($("fen").value);states=[{g:p.g,turn:p.turn}];ptr=0;sel=null;targets=[];$("fen").blur();render();
   if(rules&&!setupOK(p.g))toast(T().badSetup);}catch(e){toast(T().badFen);}};
@@ -460,8 +493,8 @@ $("tLink").onclick=()=>{const u=new URL(location.href.split("?")[0].split("#")[0
   copyText(t,T().linked);};
 $("strip").addEventListener("click",e=>{const p=e.target.getAttribute("data-p");if(p!==null)go(+p);});
 document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
-  if(e.key==="Escape"){$("modal").classList.remove("show");sel=null;if(!tool)targets=[];draw();return;}
-  if(mode==="setup"&&sel&&(e.key==="Delete"||e.key==="Backspace")){e.preventDefault();cur().g[sel[1]][sel[0]]="";sel=null;targets=[];render();return;}
+  if(e.key==="Escape"){$("modal").classList.remove("show");sel=null;targets=[];if(tool){tool=null;render();}else draw();return;}
+  if(mode==="setup"&&sel&&(e.key==="Delete"||e.key==="Backspace")){e.preventDefault();putBack();return;}
   if(e.key==="ArrowLeft"){e.preventDefault();go(ptr-1);}else if(e.key==="ArrowRight"){e.preventDefault();go(ptr+1);}});
 
 /* ---------- start-up ---------- */
