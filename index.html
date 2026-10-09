@@ -13,8 +13,8 @@ html,body{margin:0;height:100%;background:#F7F7F7;color:#333;overflow:hidden;
 #app{display:flex;flex-direction:column;height:100%;padding:.4rem;gap:.4rem}
 .bar{display:flex;gap:.3rem;flex-wrap:wrap;align-items:center}
 button,select,input{font:inherit}
-.bar button{font-size:.95rem;font-weight:500;background:#EFEFEF;border:2px solid #9A9A9A;border-radius:4px;
-  padding:.3rem .7rem;color:#222;cursor:pointer;line-height:1.2}
+.bar button{font-size:.9rem;font-weight:500;background:#EFEFEF;border:2px solid #9A9A9A;border-radius:4px;
+  padding:.3rem .5rem;white-space:nowrap;color:#222;cursor:pointer;line-height:1.2}
 .bar button:hover{background:#E4E4E4}
 .bar button.on{background:#DCE4F7;border-color:#3F66C9}
 .bar button:disabled{opacity:.4;cursor:default}
@@ -53,6 +53,10 @@ select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;bac
 @keyframes pop{0%{transform:translate(-50%,-50%) scale(.5);opacity:0}20%{transform:translate(-50%,-50%) scale(1.2);opacity:1}
   70%{opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
 @media (prefers-reduced-motion:reduce){#splash.pop{animation-duration:.01s}}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10;padding:1rem}
+#modal.show{display:flex}
+#modal .box{background:#fff;border:2px solid #777;border-radius:6px;padding:.6rem;width:min(32rem,100%);display:flex;flex-direction:column;gap:.4rem}
+#mtext{width:100%;height:12rem;font:.85rem/1.5 ui-monospace,Menlo,Consolas,monospace;resize:none;border:1px solid #BBB;border-radius:3px;padding:.4rem;-webkit-user-select:text;user-select:text}
 #toast{position:absolute;left:50%;bottom:.6rem;transform:translateX(-50%);background:#333;color:#fff;font-size:.9rem;
   padding:.35rem .8rem;border-radius:4px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.show{opacity:.92}
@@ -65,6 +69,7 @@ select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;bac
     <button id="bRedo" data-t="redo"></button>
     <button id="bReset" data-t="reset"></button>
     <button id="bFlip" data-t="flip"></button>
+    <button id="bExport" data-t="export"></button>
     <span class="gap"></span>
     <button id="bRules" class="edit-only" data-t="rules"></button>
     <button id="bSave" class="edit-only" data-t="save"></button>
@@ -80,6 +85,7 @@ select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;bac
       <span class="sep"></span>
       <select id="preset"></select>
       <button class="tool" id="tFlipS" data-t="flip"></button>
+      <button class="tool" id="tRules"></button>
       <span class="gap"></span>
       <button class="tool" id="tDone" data-t="done"></button>
     </div>
@@ -87,24 +93,26 @@ select{font-size:.9rem;padding:.2rem;border:1px solid #BBB;border-radius:3px;bac
       <span class="lbl">FEN</span><input id="fen" spellcheck="false">
       <button class="tool" id="tLoad" data-t="load"></button>
       <button class="tool" id="tCopy" data-t="copy"></button>
+      <button class="tool" id="tLink" data-t="link"></button>
     </div>
   </div>
   <div id="stage"><div id="splash">将 军</div><div id="toast"></div></div>
+  <div id="modal"><div class="box"><span class="lbl" data-t="manual"></span><textarea id="mtext" readonly></textarea><div class="bar"><span class="gap"></span><button class="tool" id="mClose" data-t="close"></button></div></div></div>
   <div id="bottom"><div id="status"></div><div id="strip"></div></div>
 </div>
 <script>
 "use strict";
 /* ---------- text ---------- */
 const TX={
-cn:{undo:"撤销",redo:"重做",reset:"重置",flip:"翻转",rules:"规则",save:"存为起始局面",setup:"摆棋",done:"完成摆棋",
+cn:{undo:"撤销",export:"复制棋谱",exported:"棋谱已复制（PGN 格式）",noMoves:"还没有着法可复制",placeRule:"规则摆放",placeFree:"自由摆放",manual:"无法自动复制，请全选下面的文字后手动复制",close:"关闭",cantPlace:"不能放在这里",kingsFace:"提示：将帅照面",moverSafe:"提示：未走棋的一方正被将军",badSetup:"提示：此局面不符合摆放规则",redo:"重做",reset:"重置",flip:"翻转",rules:"规则",save:"存为起始局面",setup:"摆棋",done:"完成摆棋",
   first:"先走：",red:"红先",black:"黑先",load:"载入",copy:"复制",erase:"移除",pKings:"预设：仅将帅",pFull:"预设：全局开局",
   pNone:"选择预设…",rt:"红方走棋",bt:"黑方走棋",ck:"将军！",start:"起始",mateR:"绝杀！红胜",mateB:"绝杀！黑胜",
-  stuckR:"困毙！红胜",stuckB:"困毙！黑胜",saved:"已存为本页起始局面",copied:"FEN 已复制",badFen:"FEN 格式有误，请检查",
+  stuckR:"困毙！红胜",stuckB:"困毙！黑胜",saved:"已存为本页起始局面",copied:"FEN 已复制",link:"复制链接",linked:"链接已复制，可贴到网页或幻灯片",badFen:"FEN 格式有误，请检查",
   noKing:"提示：棋盘上缺少将或帅",free:"自由",lang:"EN",splash:"将 军"},
-en:{undo:"Undo",redo:"Redo",reset:"Reset",flip:"Flip",rules:"Rules",save:"Save as start",setup:"Set up",done:"Done",
+en:{undo:"Undo",export:"Copy moves",exported:"Moves copied (PGN)",noMoves:"No moves to copy yet",placeRule:"Legal placement",placeFree:"Free placement",manual:"Couldn't copy automatically. Select the text below and copy it.",close:"Close",cantPlace:" can't go there",kingsFace:"Note: the kings face each other",moverSafe:"Note: the side not to move is in check",badSetup:"Note: this position breaks the placement rules",redo:"Redo",reset:"Reset",flip:"Flip",rules:"Rules",save:"Save as start",setup:"Set up",done:"Done",
   first:"To move:",red:"Red",black:"Black",load:"Load",copy:"Copy",erase:"Remove",pKings:"Preset: kings only",pFull:"Preset: opening position",
   pNone:"Choose preset…",rt:"Red to move",bt:"Black to move",ck:"Check!",start:"Start",mateR:"Checkmate. Red wins",mateB:"Checkmate. Black wins",
-  stuckR:"Stalemate. Red wins",stuckB:"Stalemate. Black wins",saved:"Saved as this slide's start",copied:"FEN copied",badFen:"That FEN could not be read",
+  stuckR:"Stalemate. Red wins",stuckB:"Stalemate. Black wins",saved:"Saved as this slide's start",copied:"FEN copied",link:"Copy link",linked:"Link copied. Paste it into a web page or slide",badFen:"That FEN could not be read",
   noKing:"Note: a king is missing",free:"free",lang:"中文",splash:"将 军"}};
 
 /* ---------- engine ---------- */
@@ -182,6 +190,32 @@ function notate(g,f,t){
   return head+(fwd>0?"进":"退")+numFor(s,"RCPK".includes(ty)?Math.abs(dy):fileOf(s,t[0]));
 }
 
+/* ---------- placement rules ---------- */
+const MAXN={K:1,A:2,B:2,N:2,R:2,C:2,P:5};
+const ASQ={r:[[3,7],[5,7],[4,8],[3,9],[5,9]],b:[[3,0],[5,0],[4,1],[3,2],[5,2]]};
+const BSQ={r:[[2,5],[6,5],[0,7],[4,7],[8,7],[2,9],[6,9]],b:[[2,0],[6,0],[0,2],[4,2],[8,2],[2,4],[6,4]]};
+function okPlace(pc,x,y){const s=pc[0],t=pc[1],hasSq=L=>L.some(q=>q[0]===x&&q[1]===y);
+  if(t==="K")return x>=3&&x<=5&&(s==="r"?y>=7:y<=2);
+  if(t==="A")return hasSq(ASQ[s]);
+  if(t==="B")return hasSq(BSQ[s]);
+  if(t==="P"){if(s==="r")return y>=7?false:y>=5?x%2===0:true;return y<=2?false:y<=4?x%2===0:true;}
+  return true;}
+function countOf(g,pc){let n=0;for(const r of g)for(const q of r)if(q===pc)n++;return n;}
+function pcLabel(pc){return lang==="cn"?(pc[0]==="r"?"红":"黑")+NAME[pc]:(pc[0]==="r"?"Red ":"Black ")+NAME[pc];}
+function fullMsg(pc){const n=MAXN[pc[1]];return lang==="cn"?`${pcLabel(pc)}最多${n}个`:`${pcLabel(pc)}: at most ${n}`;}
+/* can piece pc go to (x,y)? from = square it is moving from, or null for a new piece */
+function canPut(g,pc,x,y,from){
+  if(!rules)return true;
+  if(!okPlace(pc,x,y)){toast(pcLabel(pc)+T().cantPlace);return false;}
+  const n=countOf(g,pc)-(from?1:0)-(g[y][x]===pc&&!(from&&from[0]===x&&from[1]===y)?1:0)+1;
+  if(n>MAXN[pc[1]]){toast(fullMsg(pc));return false;}
+  return true;}
+function placeTargets(g,pc){const out=[];for(let y=0;y<10;y++)for(let x=0;x<9;x++)if(!g[y][x]&&okPlace(pc,x,y))out.push([x,y]);return out;}
+function setupOK(g){for(let y=0;y<10;y++)for(let x=0;x<9;x++){const q=g[y][x];if(q&&!okPlace(q,x,y))return false;}
+  for(const s of ["r","b"])for(const t in MAXN)if(countOf(g,s+t)>MAXN[t])return false;return true;}
+function kingsFacing(g){const a=findK(g,"r"),b=findK(g,"b");if(!a||!b||a[0]!==b[0])return false;
+  for(let y=b[1]+1;y<a[1];y++)if(g[y][a[0]])return false;return true;}
+
 /* ---------- state ---------- */
 let lang="cn",rules=true,flip=false,view="edit",mode="play";
 let states=[],ptr=0,sel=null,targets=[],drag=null,tool=null,office=false;
@@ -257,8 +291,8 @@ function draw(){
   for(let y=0;y<10;y++)for(let x=0;x<9;x++){const pc=g[y][x];if(!pc)continue;
     if(drag&&drag.moved&&drag.from[0]===x&&drag.from[1]===y){ctx.globalAlpha=.3;drawPiece(ctx,pc,PX(x),PY(y),.45*s);ctx.globalAlpha=1;continue;}
     drawPiece(ctx,pc,PX(x),PY(y),.45*s);}
-  if(sel){ctx.strokeStyle="#3F66C9";ctx.lineWidth=Math.max(2,s/14);ctx.beginPath();ctx.arc(PX(sel[0]),PY(sel[1]),.52*s,0,Math.PI*2);ctx.stroke();
-    if(rules&&mode==="play")for(const [x,y] of targets){
+  if(sel){ctx.strokeStyle="#3F66C9";ctx.lineWidth=Math.max(2,s/14);ctx.beginPath();ctx.arc(PX(sel[0]),PY(sel[1]),.52*s,0,Math.PI*2);ctx.stroke();}
+  if(rules){for(const [x,y] of targets){
       if(g[y][x]){ctx.strokeStyle="rgba(63,102,201,.85)";ctx.lineWidth=Math.max(2,s/16);ctx.beginPath();ctx.arc(PX(x),PY(y),.5*s,0,Math.PI*2);ctx.stroke();}
       else{ctx.fillStyle="rgba(63,102,201,.75)";ctx.beginPath();ctx.arc(PX(x),PY(y),.13*s,0,Math.PI*2);ctx.fill();}}}
   if(drag&&drag.moved)drawPiece(ctx,drag.pc,drag.x,drag.y,.5*s,true);
@@ -279,6 +313,7 @@ function render(){
   const t=T();
   document.querySelectorAll("[data-t]").forEach(el=>{el.textContent=t[el.dataset.t];});
   $("bLang").textContent=t.lang;
+  $("tRules").textContent=rules?t.placeRule:t.placeFree;$("tRules").classList.toggle("on",rules);
   $("bRules").classList.toggle("on",rules);$("bFlip").classList.toggle("on",flip);$("tFlipS").classList.toggle("on",flip);
   $("bUndo").disabled=ptr===0;$("bRedo").disabled=ptr>=states.length-1;
   document.body.classList.toggle("setup",mode==="setup");
@@ -304,7 +339,11 @@ function buildTray(){
   h+=`<button class="tool" data-pc="erase" data-t="erase"></button>`;
   $("tray").innerHTML=h;
   $("tray").addEventListener("click",e=>{const b=e.target.closest("[data-pc]");if(!b)return;
-    tool=tool===b.dataset.pc?null:b.dataset.pc;render();});
+    const v=b.dataset.pc,g=cur().g;
+    if(v==="erase"&&sel){g[sel[1]][sel[0]]="";sel=null;targets=[];render();return;}
+    if(tool===v){tool=null;targets=[];render();return;}
+    if(v!=="erase"&&rules&&countOf(g,v)>=MAXN[v[1]]){toast(fullMsg(v));return;}
+    tool=v;sel=null;targets=rules&&v!=="erase"?placeTargets(g,v):[];render();});
 }
 
 /* ---------- actions ---------- */
@@ -317,10 +356,15 @@ function doMove(f,t){
   states=states.slice(0,ptr+1);states.push({g:ng,turn,f,t,mv});ptr++;sel=null;targets=[];
   render();if(inCheck(ng,turn))splash();
 }
-function reset(){const s=recall("start");try{startFrom(s||KINGS_FEN);}catch(e){startFrom(KINGS_FEN);}render();}
-function enterSetup(){const st=cur();states=[{g:copyG(st.g),turn:st.turn}];ptr=0;sel=null;tool=null;mode="setup";render();}
-function leaveSetup(save){mode="play";tool=null;sel=null;const g=cur().g;
-  if(!findK(g,"r")||!findK(g,"b"))toast(T().noKing);
+const Q=new URLSearchParams(location.search);const URL_FEN=Q.get("fen");
+function reset(){const s=URL_FEN||recall("start");try{startFrom(s||KINGS_FEN);}catch(e){startFrom(KINGS_FEN);}render();}
+function enterSetup(){const st=cur();states=[{g:copyG(st.g),turn:st.turn}];ptr=0;sel=null;targets=[];tool=null;mode="setup";render();}
+function moveSetup(f,t){const g=cur().g,pc=g[f[1]][f[0]];if(!canPut(g,pc,t[0],t[1],f)){draw();return;}
+  g[t[1]][t[0]]=pc;g[f[1]][f[0]]="";sel=null;targets=[];render();}
+function leaveSetup(save){mode="play";tool=null;sel=null;targets=[];const g=cur().g,t=T();
+  if(!findK(g,"r")||!findK(g,"b"))toast(t.noKing);
+  else if(kingsFacing(g))toast(t.kingsFace);
+  else if(inCheck(g,opp(cur().turn)))toast(t.moverSafe);
   if(save&&view==="edit"){store("start",toFEN(g,cur().turn));persist(T().saved);}
   render();}
 function saveStart(){const st=cur();startFrom(toFEN(st.g,st.turn));store("start",toFEN(cur().g,cur().turn));persist(T().saved);render();}
@@ -333,10 +377,17 @@ const same=(a,b)=>a&&b&&a[0]===b[0]&&a[1]===b[1];
 cv.addEventListener("pointerdown",e=>{
   const p=hit(e),g=cur().g,r=cv.getBoundingClientRect();
   if(mode==="setup"){
-    if(!p)return;
-    if(tool){if(tool==="erase")g[p[1]][p[0]]="";else g[p[1]][p[0]]=tool;render();return;}
-    if(g[p[1]][p[0]]){cv.setPointerCapture(e.pointerId);drag={from:p,pc:g[p[1]][p[0]],x:e.clientX-r.left,y:e.clientY-r.top,moved:false,sx:e.clientX,sy:e.clientY};}
-    return;}
+    if(!p){sel=null;if(!tool)targets=[];draw();return;}
+    const here=g[p[1]][p[0]];
+    if(tool){
+      if(tool==="erase")g[p[1]][p[0]]="";
+      else if(canPut(g,tool,p[0],p[1],null))g[p[1]][p[0]]=tool;
+      targets=rules&&tool!=="erase"?placeTargets(g,tool):[];render();return;}
+    if(sel&&!here&&!same(sel,p)){moveSetup(sel,p);return;}
+    if(here){const again=same(sel,p);sel=p;targets=rules?placeTargets(g,here):[];
+      cv.setPointerCapture(e.pointerId);
+      drag={from:p,pc:here,x:e.clientX-r.left,y:e.clientY-r.top,moved:false,sx:e.clientX,sy:e.clientY,again};draw();return;}
+    sel=null;targets=[];draw();return;}
   if(!p){sel=null;targets=[];draw();return;}
   if(sel&&targets.some(m=>same(m,p))){doMove(sel,p);return;}
   const pc=g[p[1]][p[0]];
@@ -352,9 +403,12 @@ cv.addEventListener("pointermove",e=>{if(!drag)return;const r=cv.getBoundingClie
   drag.x=e.clientX-r.left;drag.y=e.clientY-r.top;
   if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>5)drag.moved=true;if(drag.moved)draw();});
 function endDrag(e){if(!drag)return;const d=drag;drag=null;
-  if(!d.moved){draw();return;}
+  if(!d.moved){if(mode==="setup"&&d.again){sel=null;targets=[];}draw();return;}
   const q=hit(e),g=cur().g;
-  if(mode==="setup"){if(!q)g[d.from[1]][d.from[0]]="";else if(!same(q,d.from)){g[q[1]][q[0]]=d.pc;g[d.from[1]][d.from[0]]="";}render();return;}
+  if(mode==="setup"){
+    if(!q){g[d.from[1]][d.from[0]]="";sel=null;targets=[];render();return;}
+    if(same(q,d.from)){draw();return;}
+    moveSetup(d.from,q);return;}
   if(q&&!same(q,d.from)&&targets.some(m=>same(m,q))){doMove(d.from,q);return;}
   draw();}
 cv.addEventListener("pointerup",endDrag);
@@ -365,7 +419,8 @@ $("bUndo").onclick=()=>go(ptr-1);
 $("bRedo").onclick=()=>go(ptr+1);
 $("bReset").onclick=()=>reset();
 $("bFlip").onclick=$("tFlipS").onclick=()=>{flip=!flip;store("flip",flip);persist();render();};
-$("bRules").onclick=()=>{rules=!rules;sel=null;targets=[];store("rules",rules);persist();render();};
+$("bRules").onclick=$("tRules").onclick=()=>{rules=!rules;sel=null;
+  targets=mode==="setup"&&rules&&tool&&tool!=="erase"?placeTargets(cur().g,tool):[];store("rules",rules);persist();render();};
 $("bSave").onclick=saveStart;
 $("bSetup").onclick=enterSetup;
 $("bLang").onclick=()=>{lang=lang==="cn"?"en":"cn";store("lang",lang);persist();render();};
@@ -374,13 +429,39 @@ $("tRed").onclick=()=>{cur().turn="r";render();};
 $("tBlack").onclick=()=>{cur().turn="b";render();};
 $("preset").onchange=e=>{const v=e.target.value;if(!v)return;const p=parseFEN(v==="k"?KINGS_FEN:FULL_FEN);
   states=[{g:p.g,turn:p.turn}];ptr=0;render();};
-$("tLoad").onclick=()=>{try{const p=parseFEN($("fen").value);states=[{g:p.g,turn:p.turn}];ptr=0;$("fen").blur();render();}catch(e){toast(T().badFen);}};
-$("tCopy").onclick=()=>{const f=$("fen");f.value=toFEN(cur().g,cur().turn);f.select();
-  const done=()=>toast(T().copied);
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(f.value).then(done,()=>{document.execCommand("copy");done();});
-  else{document.execCommand("copy");done();}};
+$("tLoad").onclick=()=>{try{const p=parseFEN($("fen").value);states=[{g:p.g,turn:p.turn}];ptr=0;sel=null;targets=[];$("fen").blur();render();
+  if(rules&&!setupOK(p.g))toast(T().badSetup);}catch(e){toast(T().badFen);}};
+function showModal(text){const m=$("mtext");m.value=text;$("modal").classList.add("show");m.focus();m.select();}
+function copyText(text,msg){
+  const fallback=()=>{const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");
+    ta.style.cssText="position:fixed;left:-9999px;top:0;opacity:0";document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand("copy");}catch(e){}ta.remove();ok?toast(msg):showModal(text);};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>toast(msg),fallback);else fallback();}
+$("mClose").onclick=()=>$("modal").classList.remove("show");
+$("modal").addEventListener("click",e=>{if(e.target.id==="modal")$("modal").classList.remove("show");});
+function pgnResult(){const st=states[states.length-1];
+  if(rules&&findK(st.g,st.turn)&&!hasLegal(st.g,st.turn))return st.turn==="r"?"0-1":"1-0";return "*";}
+function exportPGN(){
+  const s0=states[0],fen=toFEN(s0.g,s0.turn),d=new Date(),z=n=>String(n).padStart(2,"0"),res=pgnResult();
+  const head=[`[Game "Chinese Chess"]`,`[Date "${d.getFullYear()}.${z(d.getMonth()+1)}.${z(d.getDate())}"]`,`[Result "${res}"]`];
+  if(fen!==FULL_FEN)head.push(`[FEN "${fen.replace(/ w$/," w - - 0 1").replace(/ b$/," b - - 0 1")}"]`);
+  head.push(`[Format "Chinese"]`);
+  const lines=[];let line="";const bStart=s0.turn==="b";
+  for(let i=1;i<states.length;i++){const mover=states[i-1].turn,n=Math.floor((i-1+(bStart?1:0))/2)+1;
+    if(mover==="r"){if(line)lines.push(line);line=`${n}. ${states[i].mv}`;}
+    else if(i===1)line=`${n}... ${states[i].mv}`;else line+=` ${states[i].mv}`;}
+  if(line)lines.push(line);
+  return head.join("\n")+"\n\n"+lines.join("\n")+" "+res+"\n";}
+$("bExport").onclick=()=>{if(states.length<2){toast(T().noMoves);return;}copyText(exportPGN(),T().exported);};
+$("tCopy").onclick=()=>copyText(toFEN(cur().g,cur().turn),T().copied);
+$("tLink").onclick=()=>{const u=new URL(location.href.split("?")[0].split("#")[0]);
+  u.searchParams.set("fen",toFEN(cur().g,cur().turn));u.searchParams.set("lock","1");if(lang==="en")u.searchParams.set("lang","en");if(flip)u.searchParams.set("flip","1");
+  const t=u.toString();
+  copyText(t,T().linked);};
 $("strip").addEventListener("click",e=>{const p=e.target.getAttribute("data-p");if(p!==null)go(+p);});
-document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
+  if(e.key==="Escape"){$("modal").classList.remove("show");sel=null;if(!tool)targets=[];draw();return;}
+  if(mode==="setup"&&sel&&(e.key==="Delete"||e.key==="Backspace")){e.preventDefault();cur().g[sel[1]][sel[0]]="";sel=null;targets=[];render();return;}
   if(e.key==="ArrowLeft"){e.preventDefault();go(ptr-1);}else if(e.key==="ArrowRight"){e.preventDefault();go(ptr+1);}});
 
 /* ---------- start-up ---------- */
@@ -388,10 +469,12 @@ function setView(v){const was=view;view=v==="read"?"read":"edit";
   if(view==="read"){if(mode==="setup"){mode="play";tool=null;}if(was!=="read")reset();}
   render();}
 function init(){
-  lang=recall("lang")==="en"?"en":"cn";
+  lang=(Q.get("lang")||recall("lang"))==="en"?"en":"cn";
+  if(Q.get("lock")==="1")view="read";
   const r=recall("rules");rules=r===undefined?true:!!r;flip=!!recall("flip");
   buildTray();
-  const s=recall("start");
+  const s=URL_FEN||recall("start");
+  if(Q.get("flip")==="1")flip=true;
   try{startFrom(s||KINGS_FEN);}catch(e){startFrom(KINGS_FEN);}
   if(!s&&view==="edit")mode="setup";
   new ResizeObserver(layout).observe($("stage"));
